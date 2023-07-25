@@ -215,7 +215,7 @@ def update_all_hosts_file(pis, username, password) -> None:
 if __name__ == '__main__':
     input_pis = ['192.168.50.214', '192.168.50.200', '192.168.50.220']
     username = 'pi'
-    password = 'nopass'
+    password = 'EnterPassword'
     keyfile = '~/.ssh/id_rsa'
     current_hostname = 'localhost'
     pis = get_pis_on_network(input_pis)
