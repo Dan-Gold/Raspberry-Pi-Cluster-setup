@@ -47,6 +47,8 @@ def action_all_pis(pis: list[NodeInfo], username: str, password: str, action: st
         password (str): Password to login to all of the pi's
         action (str): Action to be executed on all of the pi's
     """
+    print(f"Performing action {action}")
+
     for node in pis:
 
         if action == "reboot":
@@ -92,7 +94,7 @@ def update_pi(node: NodeInfo, username: str, password: str) -> None:
     """
     print(f"Updating {node.name}, Please wait...")
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    #ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(node.ip, username=username, password=password)
 
     cmd = "sudo apt-get update -y"
@@ -117,8 +119,10 @@ def generate_ssh_key(ip: str, username: str, password: str) -> str:
     Returns:
         str: Public ssh key
     """
+    print(f"Generating ssh key for {ip}")
+
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    #ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(ip, username=username, password=password)
 
     # Create .ssh directory
@@ -165,9 +169,10 @@ def share_ssh_keys(pis: list[NodeInfo], username: str, password: str) -> None:
         username (str): Username to login to all of the pi's
         password (str): Password to login to all of the pi's
     """
+    print("Sharing ssh Keys")
     # Create an SSH client
     ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    #ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     # Connect to each Raspberry Pi
     for current_node in pis:
@@ -192,6 +197,8 @@ def get_pis_on_network(input_ips: list[str]) -> list[NodeInfo]:
     Returns:
         list[NodeInfo]: All of the pi's in the cluster represented as NodeInfo objects
     """
+    print("Finding Pi's on network")
+
     nm = nmap.PortScanner()
     scan_result = nm.scan(hosts=NETWORK_SEARCH_SECTION, arguments='-sn')#, sudo=True)
     ip_list = []
@@ -232,6 +239,7 @@ def change_hostname(node: NodeInfo, username: str, password: str) -> None:
     Raises:
         Exception: If this is unable to change the pi's hostname, then it will raise an error.
     """
+    print("Change hostname")
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(node.ip, username=username, password=password)
@@ -254,6 +262,7 @@ def update_all_hosts_file(pis: list[NodeInfo], username: str, password: str) -> 
         username (str): Username to login to all of the pi's
         password (str): Password to login to all of the pi's
     """
+    print("Update all hosts files")
     footer: str = ""
 
     pis.sort(key=lambda x: x.name)
