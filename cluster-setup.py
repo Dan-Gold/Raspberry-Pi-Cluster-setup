@@ -2,11 +2,15 @@ import nmap
 import paramiko
 import argparse
 import time
+import os
 
 # TODO: https://stackoverflow.com/questions/39523216/paramiko-add-host-key-to-known-hosts-permanently
 
+NETWORK_SEARCH_SECTION = '192.168.50.0/24'
 
 class NodeInfo():
+    """Stores important information about each pi in the cluster."""
+
     def __init__(self, ip, name):
         self.ip: str = ip
         self.name: str
@@ -26,11 +30,23 @@ class NodeInfo():
 
     @property
     def hosts_file_line(self) -> str:
+        """Contains the necessary information to be added to the hosts file.
+
+        Returns:
+            str: A string with a format as follows '127.0.0.1 rpi0 rpi0.local rpi.lan\n'
+        """
         return f"{self.ip} {self.name} {self.name}.local {self.name}.lan\n"
 
 
-def action_all_pis(pis: list, username: str, password: str, action: str) -> None:
+def action_all_pis(pis: list[NodeInfo], username: str, password: str, action: str) -> None:
+    """Perform a command on all pi's in the cluster.
 
+    Args:
+        pis (list[NodeInfo]): All of the pi's in the cluster represented as NodeInfo objects
+        username (str): Username to login to all of the pi's
+        password (str): Password to login to all of the pi's
+        action (str): Action to be executed on all of the pi's
+    """
     for node in pis:
 
         if action == "reboot":
@@ -44,42 +60,63 @@ def action_all_pis(pis: list, username: str, password: str, action: str) -> None
             node.public_key = generate_ssh_key(node.ip, username, password)
 
     if action == "reboot":
-        print("Sleeping for 30 seconds")
-        time.sleep(30)
+        print("Sleeping for 60 seconds")
+        time.sleep(60)
 
 
 def reboot_pi(ip: str, username: str, password: str) -> None:
-    """Reboots the raspberry pi."""
+    """Reboots the raspberry pi.
+
+    Args:
+        ip (str): Standard ipv4 address
+        username (str): Username to login to all of the pi's
+        password (str): Password to login to all of the pi's
+    """
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(ip, username=username, password=password)
 
-    cmd = f"sudo reboot"
+    cmd = "sudo reboot"
     stdin, stdout, stderr = ssh.exec_command(cmd)
 
     ssh.close()
 
 
 def update_pi(node: NodeInfo, username: str, password: str) -> None:
-    """Updates and upgrades a raspberry pi."""
+    """Updates and upgrades a raspberry pi.
 
+    Args:
+        node (NodeInfo): A raspberry pi represented as a NodeInfo object
+        username (str): Username to login to all of the pi's
+        password (str): Password to login to all of the pi's
+    """
     print(f"Updating {node.name}, Please wait...")
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(node.ip, username=username, password=password)
 
-    cmd = f"sudo apt-get update -y"
+    cmd = "sudo apt-get update -y"
     stdin, stdout, stderr = ssh.exec_command(cmd)
 
     time.sleep(120)
 
-    cmd = f"sudo apt-get upgrade -y"
+    cmd = "sudo apt-get upgrade -y"
     stdin, stdout, stderr = ssh.exec_command(cmd)
 
     ssh.close()
 
 
-def generate_ssh_key(ip, username, password) -> str:
+def generate_ssh_key(ip: str, username: str, password: str) -> str:
+    """Generates a private/public ssh key pair if one does not exist and returns the public key.
+
+    Args:
+        ip (str): Standard ipv4 address
+        username (str): Username to login to all of the pi's
+        password (str): Password to login to all of the pi's
+
+    Returns:
+        str: Public ssh key
+    """
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(ip, username=username, password=password)
@@ -95,18 +132,23 @@ def generate_ssh_key(ip, username, password) -> str:
     stdin, stdout, stderr = ssh.exec_command("chmod 600 ~/.ssh/authorized_keys")
 
     # Generate a new key pair
-    ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("ssh-keygen -t rsa")
-    print("Generating rsa key for ssh...")
-    time.sleep(20)
-    ssh_stdin.write('\n')
-    ssh_stdin.flush()
-    time.sleep(1)
-    ssh_stdin.write('\n')
-    ssh_stdin.flush()
-    time.sleep(1)
+    if not os.path.isfile("~/.ssh/pi_id_rsa.pub"):
+
+        ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("ssh-keygen -t rsa")
+        print("Generating rsa key for ssh...")
+        time.sleep(20)
+        ssh_stdin.write('\n')
+        ssh_stdin.flush()
+        time.sleep(1)
+        ssh_stdin.write('\n')
+        ssh_stdin.flush()
+        time.sleep(1)
+
+    else:
+        print("ssh key pair exists")
 
     # Read the public key from the file
-    stdin, stdout, stderr = ssh.exec_command("cat ~/.ssh/id_rsa.pub")
+    stdin, stdout, stderr = ssh.exec_command("cat ~/.ssh/pi_id_rsa.pub")
     public_key = stdout.read().decode()
 
     ssh.close()
@@ -114,24 +156,22 @@ def generate_ssh_key(ip, username, password) -> str:
     return public_key
 
 
-def share_ssh_keys(pis: list, username, password) -> None:
+def share_ssh_keys(pis: list[NodeInfo], username: str, password: str) -> None:
+    """Adds the generated SSH keys for each of the pi's in the cluster to the authorized_keys
+    file in each pi
+
+    Args:
+        pis (list[NodeInfo]): All of the pi's in the cluster represented as NodeInfo objects
+        username (str): Username to login to all of the pi's
+        password (str): Password to login to all of the pi's
+    """
     # Create an SSH client
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-    # Automatically add the host keys of each Raspberry Pi to the client's host key policy
-    #ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
     # Connect to each Raspberry Pi
     for current_node in pis:
         ssh.connect(current_node.ip, username=username, password=password)
-
-        # Create the .ssh directory if it doesn't exist
-        #stdin, stdout, stderr = ssh.exec_command('mkdir -p ~/.ssh && chmod 700 ~/.ssh')
-
-        # Read the contents of the public key file
-        #with open('/home/pi/.ssh/id_rsa.pub', 'r') as f:
-        #    public_key = f.read().strip()
 
         # Append the contents of the public key to the authorized_keys file on each other Raspberry Pi
         for other_node in pis:
@@ -143,9 +183,17 @@ def share_ssh_keys(pis: list, username, password) -> None:
         ssh.close()
 
 
-def get_pis_on_network(input_ips: list) -> dict:
+def get_pis_on_network(input_ips: list[str]) -> list[NodeInfo]:
+    """Searches your network on 192.168.50.0/24 to find the raspberry pi's in the provided list.
+
+    Args:
+        input_ips (list[str]): List containing all of the IP addresses of the pi's in the cluster
+
+    Returns:
+        list[NodeInfo]: All of the pi's in the cluster represented as NodeInfo objects
+    """
     nm = nmap.PortScanner()
-    scan_result = nm.scan(hosts='192.168.50.0/24', arguments='-sn')#, sudo=True)
+    scan_result = nm.scan(hosts=NETWORK_SEARCH_SECTION, arguments='-sn')#, sudo=True)
     ip_list = []
     found_input_ip = []
 
@@ -164,7 +212,7 @@ def get_pis_on_network(input_ips: list) -> dict:
         if host in input_ips:
             found_input_ip.append(host)
 
-    # Check that all input hosts have been found    
+    # Check that all input hosts have been found
     input_ip_diff = set(found_input_ip) ^ set(input_ips)
 
     for item in input_ip_diff:
@@ -173,7 +221,17 @@ def get_pis_on_network(input_ips: list) -> dict:
     return ip_list
 
 
-def change_hostname(node, username, password) -> None:
+def change_hostname(node: NodeInfo, username: str, password: str) -> None:
+    """Changes the hostname of the given raspberry pi.
+
+    Args:
+        node (NodeInfo): A raspberry pi represented as a NodeInfo object
+        username (str): Username to login to all of the pi's
+        password (str): Password to login to all of the pi's
+
+    Raises:
+        Exception: If this is unable to change the pi's hostname, then it will raise an error.
+    """
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(node.ip, username=username, password=password)
@@ -187,8 +245,15 @@ def change_hostname(node, username, password) -> None:
     ssh.close()
 
 
-def update_all_hosts_file(pis, username, password) -> None:
+def update_all_hosts_file(pis: list[NodeInfo], username: str, password: str) -> None:
+    """Updates each pi's host file with all of the information about the other pi's as well
+    as information about the current pi
 
+    Args:
+        pis (list[NodeInfo]): All of the pi's in the cluster represented as NodeInfo objects
+        username (str): Username to login to all of the pi's
+        password (str): Password to login to all of the pi's
+    """
     footer: str = ""
 
     pis.sort(key=lambda x: x.name)
@@ -216,7 +281,7 @@ if __name__ == '__main__':
     input_pis = ['192.168.50.214', '192.168.50.200', '192.168.50.220']
     username = 'pi'
     password = 'EnterPassword'
-    keyfile = '~/.ssh/id_rsa'
+    keyfile = '~/.ssh/pi_id_rsa'
     current_hostname = 'localhost'
     pis = get_pis_on_network(input_pis)
 
@@ -231,9 +296,6 @@ if __name__ == '__main__':
             if "rpi" in pi.name and pi.known:
                 last_pi_num = max(last_pi_num, int(pi.name[-1]))
 
-    # Need to add stuff to known hosts file
-    # TODO:
-
     # Change all unknown pi's hostnames
     for idx, node in enumerate(unknown_hosts, start=last_pi_num+1):
         node.name = f"rpi{idx}"
@@ -241,19 +303,19 @@ if __name__ == '__main__':
 
     # Update all host files
     update_all_hosts_file(pis, username, password)
-    
+
     # Reboot all Pi's
     action_all_pis(pis, username, password, "reboot")
-    
+
     # Setup ssh between pi's
     # Generate keys
     action_all_pis(pis, username, password, "ssh-key-gen")
 
     # Share keys
     share_ssh_keys(pis, username, password)
-    
+
     # Update all Pi's
-    #action_all_pis(pis, username, password, "update")
-    
+    action_all_pis(pis, username, password, "update")
+
     # Reboot all Pi's
-    #action_all_pis(pis, username, password, "reboot")
+    action_all_pis(pis, username, password, "reboot")
